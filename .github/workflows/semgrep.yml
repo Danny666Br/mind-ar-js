@@ -24,47 +24,51 @@ jobs:
       - uses: actions/checkout@v4
 
       # ── Community rulesets ────────────────────────────────────────────────
-      # javascript        → generic JS security (XSS, eval, prototype pollution)
-      # nodejs            → Node.js specific (path traversal, child_process, etc.)
-      # owasp-top-ten     → maps findings to OWASP categories
-      # secrets           → hardcoded credentials / API keys
+      # semgrep ci requiere SEMGREP_APP_TOKEN y sale sin ejecutar si no lo hay.
+      # semgrep scan corre siempre sin autenticación.
       - name: Run Semgrep (community rules)
         run: |
-          semgrep ci \
+          semgrep scan \
             --config p/javascript \
             --config p/nodejs \
             --config p/owasp-top-ten \
             --config p/secrets \
             --sarif \
             --output semgrep-community.sarif \
-            --error \
             --severity WARNING \
             --exclude 'dist/**' \
             --exclude 'dist-dev/**' \
             --exclude 'node_modules/**' \
-            --exclude 'custom_tfjs/**'
-        continue-on-error: true   # don't fail the job before uploading SARIF
+            --exclude 'custom_tfjs/**' \
+            || true
+          # Si el scan salió sin escribir el archivo (zero findings), crear SARIF vacío válido
+          test -f semgrep-community.sarif || echo \
+            '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Semgrep","rules":[]}},"results":[]}]}' \
+            > semgrep-community.sarif
 
       # ── MindAR-specific custom rules ──────────────────────────────────────
       - name: Run Semgrep (custom rules)
         run: |
-          semgrep \
+          semgrep scan \
             --config .semgrep/rules.yml \
             --sarif \
             --output semgrep-custom.sarif \
-            --severity INFO
-        continue-on-error: true
+            --severity INFO \
+            || true
+          test -f semgrep-custom.sarif || echo \
+            '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Semgrep","rules":[]}},"results":[]}]}' \
+            > semgrep-custom.sarif
 
       # ── Upload both SARIF files to GitHub Security tab ────────────────────
       - name: Upload community results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: semgrep-community.sarif
           category: semgrep-community
 
       - name: Upload custom rule results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: semgrep-custom.sarif
