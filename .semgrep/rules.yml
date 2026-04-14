@@ -1,0 +1,117 @@
+rules:
+
+  # ─── 1. GLSL shader code built with template literal interpolation ──────────
+  - id: mindar-glsl-template-interpolation
+    message: >
+      Variable interpolated into a GLSL shader source string (userCode).
+      If the value originates from an untrusted source (e.g. video dimensions
+      reported by a spoofed capture device), it could inject arbitrary GLSL.
+      Validate the value is a safe non-negative integer before interpolating.
+    severity: WARNING
+    languages: [javascript]
+    pattern: |
+      { ..., userCode: `...$...` }
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-94
+      owasp: "A03:2021 - Injection"
+      references:
+        - src/image-target/input-loader.js
+
+  # ─── 2. Web Worker onmessage with no default / error handler ────────────────
+  - id: mindar-worker-onmessage-no-default
+    message: >
+      Web Worker onmessage handler does not handle unknown message types.
+      A postMessage with an unexpected type is silently dropped, which can
+      mask integration bugs. Add an else branch or a default that throws.
+    severity: WARNING
+    languages: [javascript]
+    patterns:
+      - pattern: |
+          onmessage = ($MSG) => {
+            const { data } = $MSG;
+            if (data.type === $TYPE) { ... }
+          }
+      - pattern-not: |
+          onmessage = ($MSG) => {
+            const { data } = $MSG;
+            if (data.type === $TYPE) { ... }
+            else { ... }
+          }
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-754
+      references:
+        - src/image-target/compiler.worker.js
+
+  # ─── 3. msgpack.decode result used without schema validation ─────────────────
+  - id: mindar-msgpack-decode-no-schema
+    message: >
+      msgpack.decode() result is used without schema or field-type validation.
+      A malformed or malicious .mind file can supply unexpected types that
+      crash the pipeline or cause prototype pollution. Validate required fields
+      and their types immediately after decoding.
+    severity: WARNING
+    languages: [javascript]
+    pattern: |
+      $RESULT = msgpack.decode(...)
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-502
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      references:
+        - src/image-target/compiler-base.js
+
+  # ─── 4. window.MINDAR assigned without Object.freeze ────────────────────────
+  - id: mindar-global-namespace-unprotected
+    message: >
+      window.MINDAR is assigned without Object.freeze(). A third-party script
+      loaded before this module could pre-define window.MINDAR with a Proxy
+      or poisoned properties, leading to silent data exfiltration.
+      Consider: if (!window.MINDAR) window.MINDAR = Object.freeze({...})
+    severity: INFO
+    languages: [javascript]
+    pattern: window.MINDAR.$X = $Y
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-915
+      references:
+        - src/image-target/index.js
+        - src/face-target/index.js
+
+  # ─── 5. loadImage() with variable path (Node.js offline compiler) ───────────
+  - id: mindar-node-loadimage-variable-path
+    message: >
+      loadImage() called with a variable path. If this path is derived from
+      user-controlled input, it enables path traversal (e.g. ../../etc/passwd).
+      Sanitize with path.resolve() and verify the result starts within an
+      allowed base directory before calling loadImage().
+    severity: ERROR
+    languages: [javascript]
+    patterns:
+      - pattern: loadImage($VAR)
+      - pattern-not: loadImage("...")
+      - pattern-not: loadImage('...')
+    paths:
+      include:
+        - src/
+        - examples/nodejs/
+    metadata:
+      category: security
+      cwe: CWE-22
+      owasp: "A01:2021 - Broken Access Control"
+      references:
+        - src/image-target/offline-compiler.js
+        - examples/nodejs/createImageTargetLibrary.js

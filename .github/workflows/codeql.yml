@@ -1,0 +1,45 @@
+name: CodeQL Analysis
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # Weekly deep scan every Monday at 09:00 UTC (staggered from Semgrep)
+    - cron: '0 9 * * 1'
+
+jobs:
+  analyze:
+    name: CodeQL (javascript)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write  # upload SARIF to GitHub Security tab
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Initialise the CodeQL database.
+      # config-file points at our custom path/query config.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          config-file: .github/codeql/codeql-config.yml
+          # security-extended is already declared in the config file;
+          # listing it here as well makes the intent explicit in the UI.
+          queries: security-extended
+
+      # No build step needed — CodeQL auto-builds JavaScript/TypeScript.
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: codeql-javascript
+          # Upload SARIF automatically; results appear in Security → Code scanning.
+          upload: true

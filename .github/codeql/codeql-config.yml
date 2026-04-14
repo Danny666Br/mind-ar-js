@@ -1,0 +1,26 @@
+name: MindAR CodeQL config
+
+# ── Query suite ──────────────────────────────────────────────────────────────
+# security-extended covers everything in security-and-quality plus:
+#   - SSRF, ReDoS, DOM XSS, path traversal, prototype pollution,
+#     insecure deserialization, and more.
+queries:
+  - uses: security-extended
+
+# ── Paths to scan ────────────────────────────────────────────────────────────
+paths:
+  - src
+  - examples
+
+# ── Paths to exclude ─────────────────────────────────────────────────────────
+# Generated/vendored code skews results and wastes quota.
+paths-ignore:
+  - dist
+  - dist-dev
+  - node_modules
+  - custom_tfjs
+  # Static data arrays — no logic, no taint sources
+  - src/face-target/face-geometry/face-data.js
+  # WASM blobs — binary, CodeQL cannot analyze
+  - src/libs/opencv-wasm.js
+  - src/libs/opencv.js

@@ -1,0 +1,16 @@
+# Build outputs — generated code, not audited
+dist/
+dist-dev/
+
+# Dependencies
+node_modules/
+
+# TensorFlow.js custom build (vendored, not authored here)
+custom_tfjs/
+
+# OpenCV WASM blob (binary, not JS source)
+src/libs/opencv-wasm.js
+src/libs/opencv.js
+
+# Face landmark dataset (static data array, no logic)
+src/face-target/face-geometry/face-data.js
