@@ -115,3 +115,125 @@ rules:
       references:
         - src/image-target/offline-compiler.js
         - examples/nodejs/createImageTargetLibrary.js
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # REGLAS DE LIBRERÍAS — patrones de riesgo asociados a las dependencias
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ─── 6. Modelo WASM / CDN externo sin Subresource Integrity ─────────────
+  # Afecta: @mediapipe/tasks-vision (face-mesh-helper.js)
+  - id: mindar-external-wasm-no-integrity
+    message: >
+      WASM model or filesetResolver loaded from an external CDN URL without
+      Subresource Integrity (SRI) verification. If the CDN is compromised or
+      the URL is intercepted (MITM), arbitrary code is loaded and executed in
+      the user's browser. Pin the exact version URL and add an integrity hash,
+      or bundle the model as a local asset.
+    severity: WARNING
+    languages: [javascript]
+    patterns:
+      - pattern-either:
+          - pattern: vision.FilesetResolver.forVisionTasks("https://...")
+          - pattern: vision.FilesetResolver.forVisionTasks(`...`)
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-829
+      subcwe: "CWE-494 - Download of Code Without Integrity Check"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      references:
+        - src/face-target/face-mesh-helper.js
+
+  # ─── 7. modelAssetPath apuntando a URL externa (GCS / CDN) ──────────────
+  # Afecta: FaceLandmarker.createFromOptions en face-mesh-helper.js
+  - id: mindar-model-asset-external-url
+    message: >
+      modelAssetPath is set to an external URL (GCS bucket or CDN).
+      The model file (.task) is downloaded at runtime with no integrity check.
+      A compromised bucket or DNS hijack delivers a malicious model.
+      Consider bundling the model or verifying its hash after download.
+    severity: WARNING
+    languages: [javascript]
+    pattern: |
+      { ..., modelAssetPath: "https://...", ... }
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-494
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      references:
+        - src/face-target/face-mesh-helper.js
+
+  # ─── 8. innerHTML usado para insertar HTML en el DOM ────────────────────
+  # Afecta: UI._loadHTML() en src/ui/ui.js
+  - id: mindar-ui-innerhtml-assignment
+    message: >
+      innerHTML assignment found. Even when the source is a bundled static
+      HTML string, this pattern is unsafe if the content ever becomes dynamic
+      (e.g. user-supplied error messages injected into the template).
+      Prefer document.createElement() + textContent, or a sanitizer like
+      DOMPurify, so the pattern is safe by default.
+    severity: INFO
+    languages: [javascript]
+    pattern: $EL.innerHTML = $HTML
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-79
+      owasp: "A03:2021 - Injection"
+      references:
+        - src/ui/ui.js
+
+  # ─── 9. fetch() sin límite de tamaño de respuesta ───────────────────────
+  # Afecta: carga de imageTargetSrc (.mind file) en Controller
+  - id: mindar-fetch-no-size-limit
+    message: >
+      fetch() called without limiting the response size. A server returning
+      an unexpectedly large .mind file (or a malicious payload) will be fully
+      buffered into memory. Add a Content-Length check or use a streaming
+      reader that aborts above a maximum byte threshold.
+    severity: WARNING
+    languages: [javascript]
+    patterns:
+      - pattern: fetch($URL)
+      - pattern-not: fetch($URL, { signal: ... })
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-400
+      subcwe: "CWE-770 - Allocation of Resources Without Limits"
+      owasp: "A05:2021 - Security Misconfiguration"
+      references:
+        - src/image-target/controller.js
+
+  # ─── 10. postMessage enviado sin restricción de targetOrigin ────────────
+  # Afecta: workers que hacen postMessage({ type: '...' }) de vuelta al host
+  - id: mindar-postmessage-wildcard-origin
+    message: >
+      postMessage() called with "*" as targetOrigin (or no targetOrigin).
+      Any window or frame on any origin can receive the message, including
+      tracking matrices and pose data. Specify the expected origin explicitly:
+      postMessage(data, "https://your-domain.com")
+    severity: INFO
+    languages: [javascript]
+    pattern-either:
+      - pattern: postMessage($DATA, "*")
+      - pattern: postMessage($DATA)
+    paths:
+      include:
+        - src/
+    metadata:
+      category: security
+      cwe: CWE-346
+      owasp: "A01:2021 - Broken Access Control"
+      references:
+        - src/image-target/controller.worker.js
+        - src/image-target/compiler.worker.js
